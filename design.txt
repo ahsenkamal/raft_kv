@@ -1,0 +1,30 @@
+Client:
+    Send TCP packet with GET/SET/DEL instruction to a single endpoint acting as the Distributor 
+
+Distributor Node:
+    Discover running nodes (auto-discovery)
+    Keep a list
+    Receive TCP packets from clients 
+    Send to leader node
+    
+Leader Node:
+    Add log entry
+    Replicate log (send log entry to nodes)
+    Wait till majority respond (ack receiving)
+    Commit the entry
+    Notify about the commit
+
+Follower Node:
+    Start with a random timeout 250-500ms
+    If nothing happens till timeout -> Become Candidate Node
+    If received a heartbeat -> Do nothing
+    If received a LogReplicationRequest -> Add entry and respond
+    If received a VoteRequest{term} -> Vote if term>self.term + reset timeout
+
+Candidate Node:
+    Start another timeout
+    Set term+=1
+    Set votes=1
+    Send VoteRequest{term}
+    Wait for majority votes
+    If no majority -> wait for timout like a follower
