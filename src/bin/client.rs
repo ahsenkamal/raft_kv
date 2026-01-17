@@ -1,5 +1,5 @@
 use std::{env, io, net::{SocketAddr, TcpStream}};
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use raft_kv::primitives::command::{Command};
 
 fn repl(stream: &mut TcpStream) -> Result<(), anyhow::Error> {
@@ -17,10 +17,17 @@ fn repl(stream: &mut TcpStream) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn main() -> Result<(), anyhow::Error>{
+fn main() -> Result<()>{
     println!("client");
     let args: Vec<String> = env::args().collect();
-    let gateway_addr: SocketAddr = args.get(1)?.parse()?;
+    let gateway_addr: SocketAddr = match args.get(1) {
+        Some(s) => {
+            s.parse()?
+        }
+        None => {
+            return Err(anyhow!("Invalid address"));
+        }
+    };
     let mut stream = TcpStream::connect(gateway_addr)?;
     
     repl(&mut stream);
