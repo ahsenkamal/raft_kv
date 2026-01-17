@@ -1,5 +1,9 @@
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize, Debug)]
 pub enum PacketType {
-    DISCOVERY,
-    CLIENT,
-    LOG,
+    Discovery,
+    ClientReq,
+    ClientRes,
+    LogEntry,
 }

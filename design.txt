@@ -1,7 +1,7 @@
 Client:
-    Send TCP packet with GET/SET/DEL instruction to a single endpoint acting as the Distributor 
+    Send TCP packet with GET/SET/DEL instruction to a single endpoint acting as the Distributor/Gateway 
 
-Distributor Node:
+Distributor/Gateway:
     Discover running nodes (auto-discovery)
     Keep a list
     Receive TCP packets from clients 
