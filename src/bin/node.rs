@@ -1,9 +1,6 @@
 use anyhow::{Result, anyhow};
 use raft_kv::node::{Node, NodeConfig};
-use std::{
-    env,
-    net::{TcpListener, UdpSocket},
-};
+use std::env;
 
 fn parse_args() -> Result<NodeConfig> {
     let mut args = env::args().skip(1);
@@ -18,16 +15,13 @@ fn parse_args() -> Result<NodeConfig> {
     Ok(NodeConfig { node_port })
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     println!("node");
     let config = parse_args()?;
 
-    let addr = format!("0.0.0.0:{}", config.node_port);
-    let discovery_socket = UdpSocket::bind(&addr)?;
-    let node_socket = TcpListener::bind(&addr)?;
-
     let node: Node = Node::new(config);
-    node.start()?;
+    node.start().await?;
 
     Ok(())
 }

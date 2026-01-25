@@ -1,4 +1,6 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use tokio::time::{Interval, interval};
 
 pub enum NodeMode {
     Follower,
@@ -7,16 +9,16 @@ pub enum NodeMode {
 }
 
 pub struct NodeState {
-    mode: NodeMode,
-    timeout: Instant,
-    term: u32,
+    pub mode: NodeMode,
+    pub timeout: Interval,
+    pub term: u32,
 }
 
 impl NodeState {
     pub fn default() -> Self {
         Self {
             mode: NodeMode::Follower,
-            timeout: Instant::now() + Duration::from_secs(3),
+            timeout: interval(Duration::from_secs(3)),
             term: 0,
         }
     }
