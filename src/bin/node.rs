@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
     println!("node");
     let config = parse_args()?;
 
-    let node: Node = Node::new(config);
+    let mut node: Node = Node::new(config);
     node.start().await?;
 
     Ok(())

@@ -1,7 +1,9 @@
 use crate::net::discovery::handle_discovery;
 use crate::net::messaging::handle_messaging;
+use crate::node::modes::{NodeMode, candidate_start, follower_start};
 use crate::node::primitives::{KeyValueStore, LogEntry, NodeConfig, NodeSnapshot, NodeState};
 use anyhow::Result;
+use std::collections::HashMap;
 
 pub struct Node {
     config: NodeConfig,
@@ -11,17 +13,19 @@ pub struct Node {
     uncommitted_log: Vec<LogEntry>,
     store: KeyValueStore,
     snapshot: Option<NodeSnapshot>,
+    nodes: HashMap<String, u16>,
 }
 
 impl Node {
     pub fn new(config: NodeConfig) -> Self {
         // todo: validate config
         let addr = format!("0.0.0.0:{}", config.node_port);
-        let state: NodeState = NodeState::default();
-        let committed_log: Vec<LogEntry> = Vec::new();
-        let uncommitted_log: Vec<LogEntry> = Vec::new();
-        let store: KeyValueStore = KeyValueStore::new();
+        let state = NodeState::default();
+        let committed_log = Vec::new();
+        let uncommitted_log = Vec::new();
+        let store = KeyValueStore::new();
         let snapshot = None;
+        let nodes = HashMap::new();
 
         Self {
             config,
@@ -31,15 +35,27 @@ impl Node {
             uncommitted_log,
             store,
             snapshot,
+            nodes,
         }
     }
 
-    async fn handle_election() {}
-
-    pub async fn start(&self) -> Result<()> {
+    pub async fn start(&mut self) -> Result<()> {
         tokio::spawn(handle_discovery(&self.addr));
         tokio::spawn(handle_messaging(&self.addr));
-        tokio::spawn(Self::handle_election());
+
+        loop {
+            self.state.timeout_check().await;
+
+            match self.state.mode {
+                NodeMode::Follower => {
+                    candidate_start(&mut self.state);
+                }
+                NodeMode::Candidate => {
+                    follower_start();
+                }
+                NodeMode::Leader => {}
+            }
+        }
 
         Ok(())
     }

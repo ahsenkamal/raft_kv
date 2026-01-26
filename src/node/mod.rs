@@ -1,3 +1,4 @@
+mod modes;
 mod node;
 mod primitives;
 
