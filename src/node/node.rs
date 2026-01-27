@@ -1,25 +1,27 @@
 use crate::net::discovery::handle_discovery;
 use crate::net::messaging::handle_messaging;
 use crate::node::modes::{NodeMode, candidate_start, follower_start};
-use crate::node::primitives::{KeyValueStore, LogEntry, NodeConfig, NodeSnapshot, NodeState};
+use crate::node::primitives::{
+    KeyValueStore, LogEntry, NodeConfig, NodeEvent, NodeSnapshot, NodeState,
+};
 use anyhow::Result;
 use std::collections::HashMap;
+use std::net::SocketAddr;
+use tokio::sync::mpsc;
 
 pub struct Node {
     config: NodeConfig,
-    addr: String,
     state: NodeState,
     committed_log: Vec<LogEntry>,
     uncommitted_log: Vec<LogEntry>,
     store: KeyValueStore,
     snapshot: Option<NodeSnapshot>,
-    nodes: HashMap<String, u16>,
+    nodes: HashMap<String, SocketAddr>,
 }
 
 impl Node {
     pub fn new(config: NodeConfig) -> Self {
         // todo: validate config
-        let addr = format!("0.0.0.0:{}", config.node_port);
         let state = NodeState::default();
         let committed_log = Vec::new();
         let uncommitted_log = Vec::new();
@@ -29,7 +31,6 @@ impl Node {
 
         Self {
             config,
-            addr,
             state,
             committed_log,
             uncommitted_log,
@@ -39,21 +40,43 @@ impl Node {
         }
     }
 
+    fn add_new_node(&mut self, node_name: String, addr: SocketAddr) {
+        self.nodes.insert(node_name, addr);
+    }
+
     pub async fn start(&mut self) -> Result<()> {
-        tokio::spawn(handle_discovery(&self.addr));
-        tokio::spawn(handle_messaging(&self.addr));
+        let (tx, mut rx) = mpsc::channel::<NodeEvent>(10);
 
+        tokio::spawn(handle_discovery(self.config, tx.clone()));
+        // tokio::spawn(handle_messaging(&self.addr));
+
+        // Event loop
         loop {
-            self.state.timeout_check().await;
+            tokio::select! {
+                Some(event) = rx.recv() => {
+                    match event {
+                        NodeEvent::NewNode(node_name, addr) => {
+                            self.add_new_node(node_name, addr);
+                        }
+                        NodeEvent::LogEntry => {
 
-            match self.state.mode {
-                NodeMode::Follower => {
-                    candidate_start(&mut self.state);
+                        }
+                        NodeEvent::VoteReq => {
+
+                        }
+                    }
                 }
-                NodeMode::Candidate => {
-                    follower_start();
+                _ = self.state.timeout_check() => {
+                    match self.state.mode {
+                        NodeMode::Follower => {
+                            candidate_start(&mut self.state);
+                        }
+                        NodeMode::Candidate => {
+                            follower_start();
+                        }
+                        NodeMode::Leader => {}
+                    }
                 }
-                NodeMode::Leader => {}
             }
         }
 
