@@ -69,7 +69,8 @@ impl Node {
                 _ = self.state.timeout_check() => {
                     match self.state.mode {
                         NodeMode::Follower => {
-                            candidate_start(&mut self.state);
+                            self.state.init_candidate();
+                            candidate_start(&self.nodes);
                         }
                         NodeMode::Candidate => {
                             follower_start();

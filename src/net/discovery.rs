@@ -10,7 +10,9 @@ async fn discovery_beacon(socket: Arc<UdpSocket>, multicast_addr: SocketAddr) {
     let mut ticker = interval(Duration::from_secs(1));
     loop {
         ticker.tick().await;
+        // todo: take node name as cli arg
         let msg = b"raft_kv_node1";
+        // todo: send a proper packet
         let _ = socket.send_to(msg, multicast_addr).await;
     }
 }
@@ -28,6 +30,7 @@ pub async fn handle_discovery(config: NodeConfig, tx: mpsc::Sender<NodeEvent>) -
     loop {
         match shared_discovery_socket.recv_from(&mut buf).await {
             Ok((len, src)) => {
+                // todo: receive a proper packet
                 let _ = tx
                     .send(NodeEvent::NewNode(
                         String::from_utf8_lossy(&buf[..len]).into_owned(),

@@ -23,13 +23,13 @@ impl NodeState {
         self.timeout_timer.tick().await;
     }
 
-    pub fn make_candidate(&mut self) {
+    pub fn init_candidate(&mut self) {
         self.mode = NodeMode::Candidate;
         self.timeout_timer.reset();
         self.votes = 1;
     }
 
-    pub fn make_leader(&mut self) {
+    pub fn init_leader(&mut self) {
         self.mode = NodeMode::Leader;
         self.timeout_timer.reset();
     }
