@@ -1,1 +1,1 @@
-pub fn follower_start() {}
+pub fn start() {}

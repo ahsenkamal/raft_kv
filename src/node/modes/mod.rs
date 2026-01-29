@@ -1,12 +1,10 @@
-mod candidate;
-mod follower;
-mod leader;
+pub mod candidate;
+pub mod follower;
+pub mod leader;
 
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum NodeMode {
     Follower,
     Candidate,
     Leader,
 }
-
-pub use candidate::candidate_start;
-pub use follower::follower_start;

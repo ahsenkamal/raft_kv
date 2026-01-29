@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::{collections::HashMap, net::SocketAddr};
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 
-pub fn candidate_start(nodes: &HashMap<String, SocketAddr>) {
-    // [ ] broadcast request for votes
-    // [ ] wait for majority responses
-    // [ ] if majority -> leader_start()
-    // [ ] else step_down()
+pub async fn broadcast(connections: &mut HashMap<SocketAddr, TcpStream>) {
+    for (_, stream) in connections.iter_mut() {
+        let vote_req = b"vote";
+        let _ = stream.write_all(vote_req).await;
+    }
 }

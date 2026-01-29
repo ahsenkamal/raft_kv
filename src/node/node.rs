@@ -1,12 +1,16 @@
 use crate::net::discovery::handle_discovery;
 use crate::net::messaging::handle_messaging;
-use crate::node::modes::{NodeMode, candidate_start, follower_start};
+use crate::node::modes::NodeMode;
+use crate::node::modes::candidate;
+use crate::node::modes::follower;
 use crate::node::primitives::{
     KeyValueStore, LogEntry, NodeConfig, NodeEvent, NodeSnapshot, NodeState,
 };
 use anyhow::Result;
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 
 pub struct Node {
@@ -17,6 +21,7 @@ pub struct Node {
     store: KeyValueStore,
     snapshot: Option<NodeSnapshot>,
     nodes: HashMap<String, SocketAddr>,
+    connections: HashMap<SocketAddr, TcpStream>,
 }
 
 impl Node {
@@ -28,6 +33,7 @@ impl Node {
         let store = KeyValueStore::new();
         let snapshot = None;
         let nodes = HashMap::new();
+        let connections = HashMap::new();
 
         Self {
             config,
@@ -37,11 +43,15 @@ impl Node {
             store,
             snapshot,
             nodes,
+            connections,
         }
     }
 
-    fn add_new_node(&mut self, node_name: String, addr: SocketAddr) {
+    async fn add_new_node(&mut self, node_name: String, addr: SocketAddr) -> Result<()> {
         self.nodes.insert(node_name, addr);
+        let stream = TcpStream::connect(addr).await?;
+        self.connections.insert(addr, stream);
+        Ok(())
     }
 
     pub async fn start(&mut self) -> Result<()> {
@@ -56,26 +66,37 @@ impl Node {
                 Some(event) = rx.recv() => {
                     match event {
                         NodeEvent::NewNode(node_name, addr) => {
-                            self.add_new_node(node_name, addr);
+                            let _ = self.add_new_node(node_name, addr);
                         }
                         NodeEvent::LogEntry => {
+                            self.state.reset_timeout_timer();
+                        }
+                        NodeEvent::VoteReqReceived => {
 
                         }
-                        NodeEvent::VoteReq => {
-
+                        NodeEvent::VoteReceived => {
+                            if self.state.get_mode() == NodeMode::Candidate {
+                                self.state.add_vote();
+                            }
                         }
                     }
                 }
                 _ = self.state.timeout_check() => {
-                    match self.state.mode {
+                    match self.state.get_mode() {
                         NodeMode::Follower => {
                             self.state.init_candidate();
-                            candidate_start(&self.nodes);
+                            candidate::broadcast(&mut self.connections).await;
                         }
                         NodeMode::Candidate => {
-                            follower_start();
+                            if self.state.get_votes() > self.connections.len() as u32 {
+                                self.state.init_leader();
+                            } else {
+                                self.state.init_follower();
+                            }
                         }
-                        NodeMode::Leader => {}
+                        NodeMode::Leader => {
+                            self.state.reset_timeout_timer();
+                        }
                     }
                 }
             }

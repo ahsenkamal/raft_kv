@@ -8,6 +8,7 @@ Distributor/Gateway:
     Send to leader node
     
 Leader Node:
+    Set term+=1 and keep sending heartbeat
     Add log entry
     Replicate log (send log entry to nodes)
     Wait till majority respond (ack receiving)
@@ -23,7 +24,6 @@ Follower Node:
 
 Candidate Node:
     Start another timeout
-    Set term+=1
     Set votes=1
     Send VoteRequest{term}
     Wait for majority votes
