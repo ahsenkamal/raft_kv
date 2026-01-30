@@ -54,20 +54,20 @@ impl NodeState {
     }
 
     pub fn init_candidate(&mut self) {
-        self.timeout_timer.reset();
+        self.timeout_timer = interval(Duration::from_secs(3));
         self.mode = NodeMode::Candidate;
         self.votes = 1;
         self.term += 1;
     }
 
     pub fn init_leader(&mut self) {
-        self.timeout_timer.reset();
+        self.timeout_timer = interval(Duration::from_secs(1));
         self.mode = NodeMode::Leader;
         self.votes = 0;
     }
 
     pub fn init_follower(&mut self) {
-        self.timeout_timer.reset();
+        self.timeout_timer = interval(Duration::from_secs(3));
         self.mode = NodeMode::Follower;
         self.votes = 0;
     }

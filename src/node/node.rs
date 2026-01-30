@@ -1,8 +1,7 @@
 use crate::net::discovery::handle_discovery;
 use crate::net::messaging::handle_messaging;
 use crate::node::modes::NodeMode;
-use crate::node::modes::candidate;
-use crate::node::modes::follower;
+use crate::node::modes::{candidate, follower, leader};
 use crate::node::primitives::{
     KeyValueStore, LogEntry, NodeConfig, NodeEvent, NodeSnapshot, NodeState,
 };
@@ -95,6 +94,7 @@ impl Node {
 
                             if self.state.get_votes() > majority_nodes as u32 {
                                 self.state.init_leader();
+                                leader::heartbeat(&mut self.connections).await;
                             }
                         }
                     }
@@ -113,6 +113,7 @@ impl Node {
                             }
                         }
                         NodeMode::Leader => {
+                            leader::heartbeat(&mut self.connections).await;
                             self.state.reset_timeout_timer();
                         }
                     }
