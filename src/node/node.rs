@@ -71,12 +71,25 @@ impl Node {
                         NodeEvent::LogEntry => {
                             self.state.reset_timeout_timer();
                         }
-                        NodeEvent::VoteReqReceived => {
-
+                        NodeEvent::VoteReqReceived(addr, new_voted_term) => {
+                            if self.state.get_mode() == NodeMode::Follower {
+                                if let Some(stream) = self.connections.get_mut(&addr) {
+                                    if let Ok(_) = follower::send_vote(stream).await {
+                                        self.state.update_voted_term(new_voted_term);
+                                    }
+                                }
+                                self.state.reset_timeout_timer();
+                            }
                         }
                         NodeEvent::VoteReceived => {
                             if self.state.get_mode() == NodeMode::Candidate {
                                 self.state.add_vote();
+
+                                let majority_nodes = (self.connections.len() + 1)/2;
+
+                                if self.state.get_votes() > majority_nodes as u32 {
+                                    self.state.init_leader();
+                                }
                             }
                         }
                     }
@@ -85,12 +98,12 @@ impl Node {
                     match self.state.get_mode() {
                         NodeMode::Follower => {
                             self.state.init_candidate();
-                            candidate::broadcast(&mut self.connections).await;
+                            candidate::request_votes(&mut self.connections).await;
                         }
                         NodeMode::Candidate => {
-                            if self.state.get_votes() > self.connections.len() as u32 {
-                                self.state.init_leader();
-                            } else {
+                            let majority_nodes = (self.connections.len() + 1)/2;
+
+                            if self.state.get_votes() < majority_nodes as u32 {
                                 self.state.init_follower();
                             }
                         }
