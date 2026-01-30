@@ -8,8 +8,8 @@ Distributor/Gateway:
     Send to leader node
     
 Leader Node:
-    Set term+=1 and keep sending heartbeat
-    Add log entry
+    Keep sending heartbeat
+    On client request: Add log entry
     Replicate log (send log entry to nodes)
     Wait till majority respond (ack receiving)
     Commit the entry
@@ -20,11 +20,12 @@ Follower Node:
     If nothing happens till timeout -> Become Candidate Node
     If received a heartbeat -> Do nothing
     If received a LogReplicationRequest -> Add entry and respond
-    If received a VoteRequest{term} -> Vote if term>self.term + reset timeout
+    If received a VoteRequest{new_term} -> Vote if new_term>self.term + reset timeout
 
 Candidate Node:
     Start another timeout
     Set votes=1
+    Starts new term
     Send VoteRequest{term}
     Wait for majority votes
-    If no majority -> wait for timout like a follower
+    If no majority -> retry after timeout

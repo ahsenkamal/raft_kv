@@ -29,6 +29,14 @@ impl NodeState {
         self.votes
     }
 
+    pub fn get_term(&self) -> u32 {
+        self.term
+    }
+
+    pub fn get_voted_term(&self) -> u32 {
+        self.voted_term
+    }
+
     pub fn update_voted_term(&mut self, new_voted_term: u32) {
         self.voted_term = new_voted_term;
     }

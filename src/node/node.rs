@@ -71,25 +71,30 @@ impl Node {
                         NodeEvent::LogEntry => {
                             self.state.reset_timeout_timer();
                         }
-                        NodeEvent::VoteReqReceived(addr, new_voted_term) => {
-                            if self.state.get_mode() == NodeMode::Follower {
-                                if let Some(stream) = self.connections.get_mut(&addr) {
-                                    if let Ok(_) = follower::send_vote(stream).await {
-                                        self.state.update_voted_term(new_voted_term);
-                                    }
-                                }
-                                self.state.reset_timeout_timer();
+                        NodeEvent::VoteReqReceived(addr, new_term) => {
+                            if self.state.get_mode() != NodeMode::Follower
+                            || new_term <= self.state.get_term() {
+                                continue;
                             }
+
+                            if let Some(stream) = self.connections.get_mut(&addr) {
+                                if follower::send_vote(stream).await.is_ok() {
+                                    self.state.update_voted_term(new_term);
+                                }
+                            }
+
+                            self.state.reset_timeout_timer();
                         }
                         NodeEvent::VoteReceived => {
-                            if self.state.get_mode() == NodeMode::Candidate {
-                                self.state.add_vote();
+                            if self.state.get_mode() != NodeMode::Candidate {
+                                continue;
+                            }
 
-                                let majority_nodes = (self.connections.len() + 1)/2;
+                            self.state.add_vote();
+                            let majority_nodes = (self.connections.len() + 1)/2;
 
-                                if self.state.get_votes() > majority_nodes as u32 {
-                                    self.state.init_leader();
-                                }
+                            if self.state.get_votes() > majority_nodes as u32 {
+                                self.state.init_leader();
                             }
                         }
                     }
@@ -98,7 +103,7 @@ impl Node {
                     match self.state.get_mode() {
                         NodeMode::Follower => {
                             self.state.init_candidate();
-                            candidate::request_votes(&mut self.connections).await;
+                            candidate::request_votes(&mut self.connections, self.state.get_term()).await;
                         }
                         NodeMode::Candidate => {
                             let majority_nodes = (self.connections.len() + 1)/2;
