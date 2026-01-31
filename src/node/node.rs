@@ -57,7 +57,7 @@ impl Node {
         let (tx, mut rx) = mpsc::channel::<NodeEvent>(10);
 
         tokio::spawn(handle_discovery(self.config, tx.clone()));
-        // tokio::spawn(handle_messaging(&self.addr));
+        tokio::spawn(handle_messaging(self.config, tx.clone()));
 
         // Event loop
         loop {
