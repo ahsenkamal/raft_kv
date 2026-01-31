@@ -6,6 +6,7 @@ pub enum PacketType {
     ClientReq,
     ClientRes,
     LogEntry,
+    LogAck,
     VoteReq,
     Vote,
 }

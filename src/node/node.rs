@@ -54,6 +54,7 @@ impl Node {
     }
 
     pub async fn start(&mut self) -> Result<()> {
+        self.state.timeout_check().await;
         let (tx, mut rx) = mpsc::channel::<NodeEvent>(10);
 
         tokio::spawn(handle_discovery(self.config, tx.clone()));
@@ -66,6 +67,34 @@ impl Node {
                     match event {
                         NodeEvent::NewNode(node_name, addr) => {
                             let _ = self.add_new_node(node_name, addr);
+                        }
+                        NodeEvent::ClientReq(command) => {
+                            // let _ = self.store.execute(command);
+                            match self.state.get_mode() {
+                                NodeMode::Follower => {
+                                    // follower::send_to_leader(command);
+                                }
+                                NodeMode::Candidate => {
+                                    // respond error to client
+                                }
+                                NodeMode::Leader => {
+                                    let log_entry = LogEntry::new(command);
+                                    self.uncommitted_log.push(log_entry);
+                                }
+                            }
+                        }
+                        NodeEvent::LogAck(len, hash) => {
+                            // todo: use hash to verify
+                            let len = len as usize;
+                            if len == self.uncommitted_log.len() {
+                                self.state.add_log_acks();
+                            }
+
+                            let majority_nodes = (self.connections.len()+1)/2;
+                            if self.state.get_log_acks() > majority_nodes as u32 {
+                                self.committed_log.append(&mut self.uncommitted_log);
+                                self.uncommitted_log.clear();
+                            }
                         }
                         NodeEvent::LogEntry(term, entries) => {
                             self.state.reset_timeout_timer();
@@ -109,7 +138,7 @@ impl Node {
 
                             if self.state.get_votes() > majority_nodes as u32 {
                                 self.state.init_leader();
-                                leader::heartbeat(&mut self.connections, self.state.get_term()).await;
+                                leader::heartbeat(&mut self.connections, self.state.get_term(), &self.uncommitted_log).await;
                             }
                         }
                     }
@@ -129,7 +158,7 @@ impl Node {
                             }
                         }
                         NodeMode::Leader => {
-                            leader::heartbeat(&mut self.connections, self.state.get_term()).await;
+                            leader::heartbeat(&mut self.connections, self.state.get_term(), &self.uncommitted_log).await;
                             self.state.reset_timeout_timer();
                         }
                     }

@@ -8,6 +8,7 @@ pub struct NodeState {
     term: u32,
     votes: u32,
     voted_term: u32,
+    log_acks: u32,
 }
 
 impl NodeState {
@@ -18,7 +19,12 @@ impl NodeState {
             term: 0,
             votes: 0,
             voted_term: 0,
+            log_acks: 0,
         }
+    }
+
+    pub fn get_log_acks(&self) -> u32 {
+        self.log_acks
     }
 
     pub fn get_mode(&self) -> NodeMode {
@@ -53,17 +59,23 @@ impl NodeState {
         self.votes += 1;
     }
 
+    pub fn add_log_acks(&mut self) {
+        self.log_acks += 1;
+    }
+
     pub fn init_candidate(&mut self) {
         self.timeout_timer = interval(Duration::from_secs(3));
         self.mode = NodeMode::Candidate;
         self.votes = 1;
         self.term += 1;
+        self.log_acks = 0;
     }
 
     pub fn init_leader(&mut self) {
         self.timeout_timer = interval(Duration::from_secs(1));
         self.mode = NodeMode::Leader;
         self.votes = 0;
+        self.log_acks = 0;
     }
 
     pub fn init_follower(&mut self, term: u32) {
@@ -71,5 +83,6 @@ impl NodeState {
         self.mode = NodeMode::Follower;
         self.votes = 0;
         self.term = term;
+        self.log_acks = 0;
     }
 }

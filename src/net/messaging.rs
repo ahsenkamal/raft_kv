@@ -34,6 +34,7 @@ async fn handle_packet(packet: Packet, tx: mpsc::Sender<NodeEvent>) {
         PacketType::ClientRes => {}
         PacketType::Discovery => {}
         PacketType::LogEntry => {}
+        PacketType::LogAck => {}
         PacketType::VoteReq => {}
         PacketType::Vote => {}
     }
