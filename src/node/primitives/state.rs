@@ -66,9 +66,10 @@ impl NodeState {
         self.votes = 0;
     }
 
-    pub fn init_follower(&mut self) {
+    pub fn init_follower(&mut self, term: u32) {
         self.timeout_timer = interval(Duration::from_secs(3));
         self.mode = NodeMode::Follower;
         self.votes = 0;
+        self.term = term;
     }
 }

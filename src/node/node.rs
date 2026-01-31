@@ -67,8 +67,23 @@ impl Node {
                         NodeEvent::NewNode(node_name, addr) => {
                             let _ = self.add_new_node(node_name, addr);
                         }
-                        NodeEvent::LogEntry => {
+                        NodeEvent::LogEntry(term, entries) => {
                             self.state.reset_timeout_timer();
+                            match self.state.get_mode() {
+                                NodeMode::Follower => {
+                                    follower::process_entries().await;
+                                }
+                                NodeMode::Candidate => {
+                                    self.state.init_follower(term);
+                                    follower::process_entries().await;
+                                }
+                                NodeMode::Leader => {
+                                    if term > self.state.get_term() {
+                                        self.state.init_follower(term);
+                                        follower::process_entries().await;
+                                    }
+                                }
+                            }
                         }
                         NodeEvent::VoteReqReceived(addr, new_term) => {
                             if self.state.get_mode() != NodeMode::Follower
@@ -109,7 +124,8 @@ impl Node {
                             let majority_nodes = (self.connections.len() + 1)/2;
 
                             if self.state.get_votes() < majority_nodes as u32 {
-                                self.state.init_follower();
+                                self.state.init_candidate();
+                                candidate::request_votes(&mut self.connections, self.state.get_term()).await;
                             }
                         }
                         NodeMode::Leader => {
