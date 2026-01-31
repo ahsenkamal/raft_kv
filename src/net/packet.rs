@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Packet {
     pub packet_type: PacketType,
     pub payload: Vec<u8>,
@@ -26,7 +26,7 @@ impl Packet {
         return Ok(packet);
     }
 
-    fn from_bytes(packet_type: PacketType, payload: Vec<u8>) -> Packet {
+    pub fn from_bytes(packet_type: PacketType, payload: Vec<u8>) -> Packet {
         Packet {
             packet_type,
             payload,

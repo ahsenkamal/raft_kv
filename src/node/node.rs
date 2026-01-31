@@ -92,7 +92,7 @@ impl Node {
                             }
 
                             if let Some(stream) = self.connections.get_mut(&addr) {
-                                if follower::send_vote(stream).await.is_ok() {
+                                if follower::send_vote(stream, new_term).await.is_ok() {
                                     self.state.update_voted_term(new_term);
                                 }
                             }
@@ -109,7 +109,7 @@ impl Node {
 
                             if self.state.get_votes() > majority_nodes as u32 {
                                 self.state.init_leader();
-                                leader::heartbeat(&mut self.connections).await;
+                                leader::heartbeat(&mut self.connections, self.state.get_term()).await;
                             }
                         }
                     }
@@ -129,7 +129,7 @@ impl Node {
                             }
                         }
                         NodeMode::Leader => {
-                            leader::heartbeat(&mut self.connections).await;
+                            leader::heartbeat(&mut self.connections, self.state.get_term()).await;
                             self.state.reset_timeout_timer();
                         }
                     }
