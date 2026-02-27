@@ -53,6 +53,15 @@ impl Node {
         Ok(())
     }
 
+    async fn commit_log(&mut self) {
+        self.committed_log.append(&mut self.uncommitted_log);
+        self.uncommitted_log.clear();
+    }
+
+    async fn process_entries(&mut self, mut entries: Vec<LogEntry>) {
+        self.uncommitted_log.append(&mut entries);
+    }
+
     pub async fn start(&mut self) -> Result<()> {
         self.state.timeout_check().await;
         let (tx, mut rx) = mpsc::channel::<NodeEvent>(10);
@@ -92,24 +101,38 @@ impl Node {
 
                             let majority_nodes = (self.connections.len()+1)/2;
                             if self.state.get_log_acks() > majority_nodes as u32 {
-                                self.committed_log.append(&mut self.uncommitted_log);
-                                self.uncommitted_log.clear();
+                                self.commit_log().await;
+                                // send committed log msg
+                            }
+                        }
+                        NodeEvent::LogCommitted => {
+                            self.state.reset_timeout_timer();
+                            match self.state.get_mode() {
+                                NodeMode::Follower => {
+                                    self.commit_log().await;
+                                }
+                                NodeMode::Candidate => {
+                                    // do nothing
+                                }
+                                NodeMode::Leader => {
+                                    // do nothing
+                                }
                             }
                         }
                         NodeEvent::LogEntry(term, entries) => {
                             self.state.reset_timeout_timer();
                             match self.state.get_mode() {
                                 NodeMode::Follower => {
-                                    follower::process_entries().await;
+                                    self.process_entries(entries).await;
                                 }
                                 NodeMode::Candidate => {
                                     self.state.init_follower(term);
-                                    follower::process_entries().await;
+                                    self.process_entries(entries).await;
                                 }
                                 NodeMode::Leader => {
                                     if term > self.state.get_term() {
                                         self.state.init_follower(term);
-                                        follower::process_entries().await;
+                                        self.process_entries(entries).await;
                                     }
                                 }
                             }

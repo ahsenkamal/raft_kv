@@ -9,4 +9,5 @@ pub enum NodeEvent {
     VoteReqReceived(SocketAddr, u32),
     VoteReceived,
     ClientReq(Command),
+    LogCommitted,
 }

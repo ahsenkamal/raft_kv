@@ -8,5 +8,3 @@ pub async fn send_vote(stream: &mut TcpStream, term: u32) -> Result<()> {
     let packet = Packet::from_bytes(crate::net::PacketType::Vote, payload);
     Packet::send(stream, packet).await
 }
-
-pub async fn process_entries() {}
