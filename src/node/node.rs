@@ -1,4 +1,5 @@
 use crate::common::Command;
+use crate::net::{Packet, PacketType};
 use crate::net::discovery::handle_discovery;
 use crate::net::messaging::{self, handle_messaging};
 use crate::node::modes::NodeMode;
@@ -59,8 +60,12 @@ impl Node {
         self.uncommitted_log.clear();
     }
 
-    async fn process_entries(&mut self, mut entries: Vec<LogEntry>) {
+    async fn process_entries(&mut self, leader_addr: SocketAddr, mut entries: Vec<LogEntry>) {
         self.uncommitted_log.append(&mut entries);
+        if let Some(leader_stream) = self.connections.get_mut(&leader_addr) {
+            let packet = Packet::from_bytes(PacketType::LogAck, Vec::new());
+            let _ = Packet::send(leader_stream, packet).await;
+        }
     }
 
     pub async fn start(&mut self) -> Result<()> {
@@ -101,10 +106,10 @@ impl Node {
                         }
                         NodeEvent::LogAck(len, hash) => {
                             // todo: use hash to verify
-                            let len = len as usize;
-                            if len == self.uncommitted_log.len() {
-                                self.state.add_log_acks();
-                            }
+                            // let len = len as usize;
+                            // if len == self.uncommitted_log.len() {
+                            // }
+                            self.state.add_log_acks();
 
                             let majority_nodes = (self.connections.len()+1)/2;
                             if self.state.get_log_acks() > majority_nodes as u32 {
@@ -126,20 +131,20 @@ impl Node {
                                 }
                             }
                         }
-                        NodeEvent::LogEntry(term, entries) => {
+                        NodeEvent::LogEntry(leader_addr, term, entries) => {
                             self.state.reset_timeout_timer();
                             match self.state.get_mode() {
                                 NodeMode::Follower => {
-                                    self.process_entries(entries).await;
+                                    self.process_entries(leader_addr, entries).await;
                                 }
                                 NodeMode::Candidate => {
                                     self.state.init_follower(term);
-                                    self.process_entries(entries).await;
+                                    self.process_entries(leader_addr, entries).await;
                                 }
                                 NodeMode::Leader => {
                                     if term > self.state.get_term() {
                                         self.state.init_follower(term);
-                                        self.process_entries(entries).await;
+                                        self.process_entries(leader_addr, entries).await;
                                     }
                                 }
                             }
