@@ -2,11 +2,15 @@ use anyhow::Result;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
+use tokio::io::AsyncWriteExt;
+use tokio::sync::oneshot;
 
+use crate::common::Command;
 use crate::net::Packet;
 use crate::net::PacketType;
 use crate::node::NodeConfig;
 use crate::node::NodeEvent;
+use crate::node::LogEntry;
 
 pub async fn handle_messaging(config: NodeConfig, tx: mpsc::Sender<NodeEvent>) -> Result<()> {
     let node_socket = TcpListener::bind(config.node_addr).await?;
@@ -23,17 +27,36 @@ pub async fn handle_messaging(config: NodeConfig, tx: mpsc::Sender<NodeEvent>) -
 async fn handle_connection(mut stream: TcpStream, tx: mpsc::Sender<NodeEvent>) -> Result<()> {
     loop {
         if let Ok(packet) = Packet::from_stream(&mut stream).await {
-            handle_packet(packet, tx.clone()).await;
+            handle_packet(&mut stream, packet, tx.clone()).await;
         }
     }
 }
 
-async fn handle_packet(packet: Packet, tx: mpsc::Sender<NodeEvent>) {
+async fn handle_packet(stream: &mut TcpStream, packet: Packet, tx: mpsc::Sender<NodeEvent>) {
     match packet.packet_type {
-        PacketType::ClientReq => {}
-        PacketType::ClientRes => {}
-        PacketType::Discovery => {}
-        PacketType::LogEntry => {}
+        PacketType::ClientReq => {
+            let command = Command::from_packet(packet);
+            let (reply_tx, reply_rx) = oneshot::channel();
+            let _ = tx.send(NodeEvent::ClientReq(reply_tx, command)).await;
+            
+            if let Ok(reply) = reply_rx.await {
+                let _ = stream.write_all(reply.as_bytes()).await;
+            }
+        }
+        PacketType::ClientRes => {
+            // do nothing
+        }
+        PacketType::Discovery => {
+            // do nothing
+        }
+        PacketType::LogEntry => {
+            // todo: remove unwraps
+            let term = u32::from_be_bytes(packet.payload[0..4].try_into().unwrap());
+            let entries_bytes = &packet.payload[4..];
+            let entries: Vec<LogEntry> = bincode::deserialize(entries_bytes).unwrap();
+
+            let _ = tx.send(NodeEvent::LogEntry(term, entries)).await;
+        }
         PacketType::LogAck => {}
         PacketType::VoteReq => {}
         PacketType::Vote => {}

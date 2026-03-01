@@ -3,7 +3,7 @@ use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Command {
     SET { key: String, value: String },
     GET { key: String },
@@ -38,5 +38,11 @@ impl Command {
 
         Packet::send(stream, packet).await?;
         Ok(())
+    }
+
+    pub fn from_packet(packet: Packet) -> Self {
+        let bytes = packet.payload;
+        let command = bincode::deserialize(&bytes).unwrap();
+        return command;
     }
 }

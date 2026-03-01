@@ -13,12 +13,13 @@ impl KeyValueStore {
         }
     }
 
-    pub fn execute(&mut self, command: Command) -> Result<()> {
+    pub fn execute(&mut self, command: Command) -> Option<String> {
         match command {
-            Command::GET { key } => {}
-            Command::DEL { key } => {}
-            Command::SET { key, value } => {}
+            Command::GET { key } => {
+                self.store.get(&key).cloned()
+            }
+            Command::DEL { key } => {None}
+            Command::SET { key, value } => {None}
         }
-        Ok(())
     }
 }

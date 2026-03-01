@@ -1,5 +1,6 @@
+use crate::common::Command;
 use crate::net::discovery::handle_discovery;
-use crate::net::messaging::handle_messaging;
+use crate::net::messaging::{self, handle_messaging};
 use crate::node::modes::NodeMode;
 use crate::node::modes::{candidate, follower, leader};
 use crate::node::primitives::{
@@ -77,7 +78,7 @@ impl Node {
                         NodeEvent::NewNode(node_name, addr) => {
                             let _ = self.add_new_node(node_name, addr);
                         }
-                        NodeEvent::ClientReq(command) => {
+                        NodeEvent::ClientReq(sender, command) => {
                             // let _ = self.store.execute(command);
                             match self.state.get_mode() {
                                 NodeMode::Follower => {
@@ -87,8 +88,14 @@ impl Node {
                                     // respond error to client
                                 }
                                 NodeMode::Leader => {
-                                    let log_entry = LogEntry::new(command);
-                                    self.uncommitted_log.push(log_entry);
+                                    if matches!(command, Command::GET {..}) {
+                                        if let Some(value) = self.store.execute(command) {
+                                            let _ = sender.send(value);
+                                        }
+                                    } else {
+                                        let log_entry = LogEntry::new(command);
+                                        self.uncommitted_log.push(log_entry);
+                                    }
                                 }
                             }
                         }

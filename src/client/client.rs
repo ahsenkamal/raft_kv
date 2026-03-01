@@ -1,6 +1,7 @@
 use crate::client::ClientConfig;
 use crate::common::Command;
 use anyhow::Result;
+use tokio::io::{AsyncReadExt};
 use std::io;
 use tokio::net::TcpStream;
 
@@ -34,6 +35,12 @@ impl Client {
             }
             let command: Command = Command::parse(&input)?;
             Command::send(stream, command).await?;
+
+            // todo: proper framing while receiving
+            let mut buffer = [0u8; 1024];
+            let n = stream.read(&mut buffer).await?;
+            let response = String::from_utf8_lossy(&buffer[..n]);
+            println!("Response: {}", response);
         }
 
         Ok(())
