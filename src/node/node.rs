@@ -72,8 +72,8 @@ impl Node {
         self.state.timeout_check().await;
         let (tx, mut rx) = mpsc::channel::<NodeEvent>(10);
 
-        tokio::spawn(handle_discovery(self.config, tx.clone()));
-        tokio::spawn(handle_messaging(self.config, tx.clone()));
+        tokio::spawn(handle_discovery(self.config.clone(), tx.clone()));
+        tokio::spawn(handle_messaging(self.config.clone(), tx.clone()));
 
         // Event loop
         loop {
