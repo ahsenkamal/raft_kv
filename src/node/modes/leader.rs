@@ -10,6 +10,7 @@ pub async fn heartbeat(
     term: u32,
     entries: &Vec<LogEntry>,
 ) {
+    println!("Sending heartbeat to all nodes");
     let mut payload = Vec::from(term.to_be_bytes());
     let mut entries_bytes = bincode::serialize(entries).unwrap_or(vec![0u8]);
     payload.append(&mut entries_bytes);

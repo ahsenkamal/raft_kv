@@ -6,12 +6,12 @@ use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
+use local_ip_address;
 
 async fn discovery_beacon(node_name: String, node_addr: SocketAddr, socket: Arc<UdpSocket>, multicast_addr: SocketAddr) {
     let mut ticker = interval(Duration::from_secs(1));
     loop {
         ticker.tick().await;
-        // todo: send node_addr too
         let port = node_addr.port().to_be_bytes();
         let msg = node_name.as_bytes();
         let mut payload = Vec::new();
@@ -20,13 +20,11 @@ async fn discovery_beacon(node_name: String, node_addr: SocketAddr, socket: Arc<
 
         // todo: send a proper packet
         let _ = socket.send_to(&payload, multicast_addr).await;
-        println!("sending {}", node_name);
     }
 }
 
 pub async fn handle_discovery(config: NodeConfig, tx: mpsc::Sender<NodeEvent>) -> Result<()> {
     let discovery_socket = UdpSocket::bind("0.0.0.0:8999").await?;
-    println!("bound udp 8999");
     let multi_ip = match config.multicast_addr.ip() {
         std::net::IpAddr::V4(addr) => addr,
         std::net::IpAddr::V6(_) => return Err(anyhow!("error parsing multicast ip")),
@@ -46,15 +44,17 @@ pub async fn handle_discovery(config: NodeConfig, tx: mpsc::Sender<NodeEvent>) -
     ));
 
     let mut buf = [0u8; 1024];
+    let my_addr = local_ip_address::local_ip().unwrap();;
     loop {
-        println!("waiting for packets...");
         match shared_discovery_socket.recv_from(&mut buf).await {
             Ok((len, src)) => {
+                if src.ip() == my_addr {
+                    continue;
+                }
                 // todo: receive a proper packet
                 let port = u16::from_be_bytes(buf[..2].try_into().unwrap());
-                let msg = String::from_utf8_lossy(&buf[2..]).into_owned();
+                let msg = String::from_utf8_lossy(&buf[2..len]).into_owned();
                 let new_addr = SocketAddr::new(src.ip(), port);
-                println!("found {}", new_addr);
 
                 let _ = tx.send(NodeEvent::NewNode(msg, new_addr)).await;
             }

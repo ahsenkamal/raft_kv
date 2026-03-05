@@ -34,7 +34,7 @@ fn parse_args() -> Result<NodeConfig> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = parse_args()?;
-    println!("node at port: {}", config.node_addr);
+    println!("node bound at port: {}", config.node_addr);
     
     let mut node: Node = Node::new(config);
     node.start().await?;

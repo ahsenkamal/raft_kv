@@ -63,23 +63,26 @@ impl NodeState {
         self.log_acks += 1;
     }
 
-    pub fn init_candidate(&mut self) {
-        self.timeout_timer = interval(Duration::from_secs(3));
+    pub async fn init_candidate(&mut self) {
+        self.timeout_timer = interval(Duration::from_secs(3) + Duration::from_millis(rand::random::<u64>() % 1000));
+        self.timeout_check().await;
         self.mode = NodeMode::Candidate;
         self.votes = 1;
         self.term += 1;
         self.log_acks = 0;
     }
 
-    pub fn init_leader(&mut self) {
+    pub async fn init_leader(&mut self) {
         self.timeout_timer = interval(Duration::from_secs(1));
+        self.timeout_check().await;
         self.mode = NodeMode::Leader;
         self.votes = 0;
         self.log_acks = 0;
     }
 
-    pub fn init_follower(&mut self, term: u32) {
-        self.timeout_timer = interval(Duration::from_secs(3));
+    pub async fn init_follower(&mut self, term: u32) {
+        self.timeout_timer = interval(Duration::from_secs(3) + Duration::from_millis(rand::random::<u64>() % 1000));
+        self.timeout_check().await;
         self.mode = NodeMode::Follower;
         self.votes = 0;
         self.term = term;

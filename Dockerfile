@@ -3,6 +3,6 @@ WORKDIR /raft_kv
 
 COPY . .
 
-RUN cargo build
+RUN cargo build --release
 
-ENTRYPOINT ["cargo", "run", "--bin", "node", "--"]
+ENTRYPOINT ["cargo", "run", "--bin"]

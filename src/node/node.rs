@@ -49,6 +49,9 @@ impl Node {
     }
 
     async fn add_new_node(&mut self, node_name: String, addr: SocketAddr) -> Result<()> {
+        if self.nodes.contains_key(&node_name) {
+            return Ok(());
+        }
         self.nodes.insert(node_name, addr);
         let stream = TcpStream::connect(addr).await?;
         self.connections.insert(addr, stream);
@@ -81,9 +84,10 @@ impl Node {
                 Some(event) = rx.recv() => {
                     match event {
                         NodeEvent::NewNode(node_name, addr) => {
-                            let _ = self.add_new_node(node_name, addr);
+                            let _ = self.add_new_node(node_name, addr).await;
                         }
                         NodeEvent::ClientReq(sender, command) => {
+                            println!("NodeEvent: ClientReq: {:?}", command);
                             // let _ = self.store.execute(command);
                             match self.state.get_mode() {
                                 NodeMode::Follower => {
@@ -105,6 +109,7 @@ impl Node {
                             }
                         }
                         NodeEvent::LogAck(len, hash) => {
+                            println!("NodeEvent: LogAck: len {}, hash {}", len, hash);
                             // todo: use hash to verify
                             // let len = len as usize;
                             // if len == self.uncommitted_log.len() {
@@ -118,6 +123,7 @@ impl Node {
                             }
                         }
                         NodeEvent::LogCommitted => {
+                            println!("NodeEvent: LogCommitted");
                             self.state.reset_timeout_timer();
                             match self.state.get_mode() {
                                 NodeMode::Follower => {
@@ -132,26 +138,29 @@ impl Node {
                             }
                         }
                         NodeEvent::LogEntry(leader_addr, term, entries) => {
+                            println!("NodeEvent: LogEntry from {} with term {}, entries len {}", leader_addr, term, entries.len());
                             self.state.reset_timeout_timer();
                             match self.state.get_mode() {
                                 NodeMode::Follower => {
                                     self.process_entries(leader_addr, entries).await;
                                 }
                                 NodeMode::Candidate => {
-                                    self.state.init_follower(term);
+                                    self.state.init_follower(term).await;
                                     self.process_entries(leader_addr, entries).await;
                                 }
                                 NodeMode::Leader => {
                                     if term > self.state.get_term() {
-                                        self.state.init_follower(term);
+                                        self.state.init_follower(term).await;
                                         self.process_entries(leader_addr, entries).await;
                                     }
                                 }
                             }
                         }
                         NodeEvent::VoteReqReceived(addr, new_term) => {
-                            if self.state.get_mode() != NodeMode::Follower
-                            || new_term <= self.state.get_term() {
+                            println!("NodeEvent: VoteReqReceived from {} with term {}", addr, new_term);
+                            // check voted_term
+                            if self.state.get_mode() != NodeMode::Follower || new_term <= self.state.get_term() {
+                                println!("Vote request from {} rejected", addr);
                                 continue;
                             }
 
@@ -164,6 +173,7 @@ impl Node {
                             self.state.reset_timeout_timer();
                         }
                         NodeEvent::VoteReceived => {
+                            println!("NodeEvent: VoteReceived");
                             if self.state.get_mode() != NodeMode::Candidate {
                                 continue;
                             }
@@ -172,24 +182,34 @@ impl Node {
                             let majority_nodes = (self.connections.len() + 1)/2;
 
                             if self.state.get_votes() > majority_nodes as u32 {
-                                self.state.init_leader();
+                                self.state.init_leader().await;
                                 leader::heartbeat(&mut self.connections, self.state.get_term(), &self.uncommitted_log).await;
                             }
                         }
                     }
                 }
                 _ = self.state.timeout_check() => {
+                    println!("\nTimeout!\nPrevState: {:?}\nTerm: {}\nNodes: {:?}\nConnections: {:?}\n", self.state.get_mode(), self.state.get_term(), self.nodes, self.connections.len());
                     match self.state.get_mode() {
                         NodeMode::Follower => {
-                            self.state.init_candidate();
+                            self.state.init_candidate().await;
+                            println!("New State: Candidate");
                             candidate::request_votes(&mut self.connections, self.state.get_term()).await;
                         }
                         NodeMode::Candidate => {
                             let majority_nodes = (self.connections.len() + 1)/2;
 
-                            if self.state.get_votes() < majority_nodes as u32 {
-                                self.state.init_candidate();
+                            println!("Votes: {}, Votes needed: >{}", self.state.get_votes(), majority_nodes);
+
+                            if self.state.get_votes() <= majority_nodes as u32 {
+                                println!("Election failed, restarting election");
+                                self.state.init_candidate().await;
+                                println!("New State: Candidate");
                                 candidate::request_votes(&mut self.connections, self.state.get_term()).await;
+                            } else {
+                                println!("Election succeeded, becoming leader");
+                                self.state.init_leader().await;
+                                leader::heartbeat(&mut self.connections, self.state.get_term(), &self.uncommitted_log).await;
                             }
                         }
                         NodeMode::Leader => {
@@ -200,7 +220,5 @@ impl Node {
                 }
             }
         }
-
-        Ok(())
     }
 }

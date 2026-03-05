@@ -35,12 +35,14 @@ async fn handle_connection(mut stream: TcpStream, tx: mpsc::Sender<NodeEvent>) -
 async fn handle_packet(stream: &mut TcpStream, packet: Packet, tx: mpsc::Sender<NodeEvent>) {
     match packet.packet_type {
         PacketType::ClientReq => {
+            println!("Received client request");
             let command = Command::from_packet(packet);
             let (reply_tx, reply_rx) = oneshot::channel();
             let _ = tx.send(NodeEvent::ClientReq(reply_tx, command)).await;
             
             if let Ok(reply) = reply_rx.await {
                 let _ = stream.write_all(reply.as_bytes()).await;
+                println!("Responding: {}", reply);
             }
         }
         PacketType::ClientRes => {
@@ -59,15 +61,15 @@ async fn handle_packet(stream: &mut TcpStream, packet: Packet, tx: mpsc::Sender<
             let _ = tx.send(NodeEvent::LogEntry(leader_addr, term, entries)).await;
         }
         PacketType::LogAck => {
-            let _ = tx.send(NodeEvent::LogAck(0, String::new()));
+            let _ = tx.send(NodeEvent::LogAck(0, String::new())).await;
         }
         PacketType::VoteReq => {
             let term_bytes: [u8; 4] = packet.payload[0..4].try_into().unwrap();
             let new_term = u32::from_be_bytes(term_bytes);
-            let _ = tx.send(NodeEvent::VoteReqReceived(stream.peer_addr().unwrap(), new_term));
+            let _ = tx.send(NodeEvent::VoteReqReceived(stream.peer_addr().unwrap(), new_term)).await;
         }
         PacketType::Vote => {
-            let _ = tx.send(NodeEvent::VoteReceived);
+            let _ = tx.send(NodeEvent::VoteReceived).await;
         }
     }
 }
