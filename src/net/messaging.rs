@@ -61,11 +61,15 @@ async fn handle_packet(stream: &mut TcpStream, packet: Packet, tx: mpsc::Sender<
             let _ = tx.send(NodeEvent::LogEntry(leader_addr, term, entries)).await;
         }
         PacketType::LogAck => {
-            let _ = tx.send(NodeEvent::LogAck(0, String::new())).await;
+            let _ = tx.send(NodeEvent::LogAck(stream.peer_addr().unwrap().ip(), 0, String::new())).await;
+        }
+        PacketType::LogCommitted => {
+            let _ = tx.send(NodeEvent::LogCommitted).await;
         }
         PacketType::VoteReq => {
             let term_bytes: [u8; 4] = packet.payload[0..4].try_into().unwrap();
             let new_term = u32::from_be_bytes(term_bytes);
+            println!("Vote req received: {} {}", stream.peer_addr().unwrap(), stream.local_addr().unwrap());
             let _ = tx.send(NodeEvent::VoteReqReceived(stream.peer_addr().unwrap(), new_term)).await;
         }
         PacketType::Vote => {

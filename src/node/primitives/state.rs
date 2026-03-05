@@ -1,6 +1,7 @@
 use crate::node::modes::NodeMode;
-use std::time::Duration;
+use std::{net::IpAddr, time::Duration};
 use tokio::time::{Interval, interval};
+use std::collections::HashSet;
 
 pub struct NodeState {
     mode: NodeMode,
@@ -8,7 +9,7 @@ pub struct NodeState {
     term: u32,
     votes: u32,
     voted_term: u32,
-    log_acks: u32,
+    log_acks: HashSet<IpAddr>,
 }
 
 impl NodeState {
@@ -19,12 +20,12 @@ impl NodeState {
             term: 0,
             votes: 0,
             voted_term: 0,
-            log_acks: 0,
+            log_acks: HashSet::new(),
         }
     }
 
     pub fn get_log_acks(&self) -> u32 {
-        self.log_acks
+        self.log_acks.len() as u32
     }
 
     pub fn get_mode(&self) -> NodeMode {
@@ -59,17 +60,21 @@ impl NodeState {
         self.votes += 1;
     }
 
-    pub fn add_log_acks(&mut self) {
-        self.log_acks += 1;
+    pub fn add_log_acks(&mut self, ip: IpAddr) {
+        self.log_acks.insert(ip);
+    }
+
+    pub fn reset_log_acks(&mut self) {
+        self.log_acks.clear();
     }
 
     pub async fn init_candidate(&mut self) {
-        self.timeout_timer = interval(Duration::from_secs(3) + Duration::from_millis(rand::random::<u64>() % 1000));
+        self.timeout_timer = interval(Duration::from_secs(1) + Duration::from_millis(rand::random::<u64>() % 1000));
         self.timeout_check().await;
         self.mode = NodeMode::Candidate;
         self.votes = 1;
         self.term += 1;
-        self.log_acks = 0;
+        self.log_acks = HashSet::new();
     }
 
     pub async fn init_leader(&mut self) {
@@ -77,15 +82,15 @@ impl NodeState {
         self.timeout_check().await;
         self.mode = NodeMode::Leader;
         self.votes = 0;
-        self.log_acks = 0;
+        self.log_acks = HashSet::new();
     }
 
     pub async fn init_follower(&mut self, term: u32) {
-        self.timeout_timer = interval(Duration::from_secs(3) + Duration::from_millis(rand::random::<u64>() % 1000));
+        self.timeout_timer = interval(Duration::from_secs(1) + Duration::from_millis(rand::random::<u64>() % 1000));
         self.timeout_check().await;
         self.mode = NodeMode::Follower;
         self.votes = 0;
         self.term = term;
-        self.log_acks = 0;
+        self.log_acks = HashSet::new();
     }
 }

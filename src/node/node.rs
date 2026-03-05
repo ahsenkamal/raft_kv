@@ -10,6 +10,7 @@ use crate::node::primitives::{
 use anyhow::Result;
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::net::IpAddr;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
@@ -22,7 +23,7 @@ pub struct Node {
     store: KeyValueStore,
     snapshot: Option<NodeSnapshot>,
     nodes: HashMap<String, SocketAddr>,
-    connections: HashMap<SocketAddr, TcpStream>,
+    connections: HashMap<IpAddr, TcpStream>,
 }
 
 impl Node {
@@ -54,20 +55,27 @@ impl Node {
         }
         self.nodes.insert(node_name, addr);
         let stream = TcpStream::connect(addr).await?;
-        self.connections.insert(addr, stream);
+        self.connections.insert(addr.ip(), stream);
         Ok(())
     }
 
     async fn commit_log(&mut self) {
+        for entry in self.uncommitted_log.iter() {
+            self.store.execute(entry.command.clone());
+        }
         self.committed_log.append(&mut self.uncommitted_log);
         self.uncommitted_log.clear();
     }
 
     async fn process_entries(&mut self, leader_addr: SocketAddr, mut entries: Vec<LogEntry>) {
+        if entries.len() > 0 {
+            println!("\nAppending {} new uncommitted log entries\n", entries.len()); 
+        }
         self.uncommitted_log.append(&mut entries);
-        if let Some(leader_stream) = self.connections.get_mut(&leader_addr) {
+        if let Some(leader_stream) = self.connections.get_mut(&leader_addr.ip()) {
             let packet = Packet::from_bytes(PacketType::LogAck, Vec::new());
             let _ = Packet::send(leader_stream, packet).await;
+            println!("Sent LogAck to leader {}, uncommitted log len: {}", leader_addr.ip(), self.uncommitted_log.len());
         }
     }
 
@@ -97,29 +105,42 @@ impl Node {
                                     // respond error to client
                                 }
                                 NodeMode::Leader => {
+                                    println!("Executing command: {:?}", command);
                                     if matches!(command, Command::GET {..}) {
                                         if let Some(value) = self.store.execute(command) {
                                             let _ = sender.send(value);
+                                        } else {
+                                            let _ = sender.send("Key not found".to_string());
                                         }
                                     } else {
                                         let log_entry = LogEntry::new(command);
                                         self.uncommitted_log.push(log_entry);
+                                        println!("New uncommitted log entry, len: {}", self.uncommitted_log.len());
+                                        let _ = sender.send("Command received".to_string());
                                     }
                                 }
                             }
                         }
-                        NodeEvent::LogAck(len, hash) => {
+                        NodeEvent::LogAck(ip, len, hash) => {
                             println!("NodeEvent: LogAck: len {}, hash {}", len, hash);
+                            if self.state.get_mode() != NodeMode::Leader {
+                                println!("Received LogAck but not leader, ignoring");
+                                continue;
+                            }
                             // todo: use hash to verify
                             // let len = len as usize;
                             // if len == self.uncommitted_log.len() {
                             // }
-                            self.state.add_log_acks();
+
+                            self.state.add_log_acks(ip);
 
                             let majority_nodes = (self.connections.len()+1)/2;
+                            println!("Total acks: {}, Majority nodes: {}", self.state.get_log_acks(), majority_nodes);
                             if self.state.get_log_acks() > majority_nodes as u32 {
                                 self.commit_log().await;
-                                // send committed log msg
+                                println!("Log entry committed, total committed log len: {}", self.committed_log.len());
+                                leader::send_log_committed(&mut self.connections).await;
+                                self.state.reset_log_acks();
                             }
                         }
                         NodeEvent::LogCommitted => {
@@ -139,6 +160,7 @@ impl Node {
                         }
                         NodeEvent::LogEntry(leader_addr, term, entries) => {
                             println!("NodeEvent: LogEntry from {} with term {}, entries len {}", leader_addr, term, entries.len());
+                            println!("KVStore before processing entries: {:?}", self.store);
                             self.state.reset_timeout_timer();
                             match self.state.get_mode() {
                                 NodeMode::Follower => {
@@ -155,19 +177,25 @@ impl Node {
                                     }
                                 }
                             }
+                            println!("KVStore after processing entries: {:?}", self.store);
                         }
                         NodeEvent::VoteReqReceived(addr, new_term) => {
                             println!("NodeEvent: VoteReqReceived from {} with term {}", addr, new_term);
-                            // check voted_term
-                            if self.state.get_mode() != NodeMode::Follower || new_term <= self.state.get_term() {
+                            if new_term <= self.state.get_term() {
                                 println!("Vote request from {} rejected", addr);
                                 continue;
                             }
 
-                            if let Some(stream) = self.connections.get_mut(&addr) {
+                            self.state.init_follower(new_term).await;
+
+                            if let Some(stream) = self.connections.get_mut(&addr.ip()) {
                                 if follower::send_vote(stream, new_term).await.is_ok() {
                                     self.state.update_voted_term(new_term);
+                                } else {
+                                    println!("Failed to send vote response to {}, vote request rejected", addr);
                                 }
+                            } else {
+                                println!("No connection found for {}, vote request rejected", addr);
                             }
 
                             self.state.reset_timeout_timer();
@@ -189,7 +217,7 @@ impl Node {
                     }
                 }
                 _ = self.state.timeout_check() => {
-                    println!("\nTimeout!\nPrevState: {:?}\nTerm: {}\nNodes: {:?}\nConnections: {:?}\n", self.state.get_mode(), self.state.get_term(), self.nodes, self.connections.len());
+                    println!("\nTimeout!\nPrevState: {:?}\nTerm: {}\nNodes: {:?}\nConnections: {:?}\nKVStore: {:?}", self.state.get_mode(), self.state.get_term(), self.nodes, self.connections.len(), self.store);
                     match self.state.get_mode() {
                         NodeMode::Follower => {
                             self.state.init_candidate().await;

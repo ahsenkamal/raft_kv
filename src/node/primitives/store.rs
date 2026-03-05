@@ -2,6 +2,7 @@ use crate::common::Command;
 use anyhow::Result;
 use std::collections::HashMap;
 
+#[derive(Debug)]
 pub struct KeyValueStore {
     store: HashMap<String, String>,
 }
@@ -18,8 +19,14 @@ impl KeyValueStore {
             Command::GET { key } => {
                 self.store.get(&key).cloned()
             }
-            Command::DEL { key } => {None}
-            Command::SET { key, value } => {None}
+            Command::DEL { key } => {
+                self.store.remove(&key);
+                None
+            }
+            Command::SET { key, value } => {
+                self.store.insert(key, value);
+                None
+            }
         }
     }
 }

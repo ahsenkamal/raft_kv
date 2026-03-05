@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use tokio::sync::oneshot::Sender;
 
 use crate::{common::Command, node::primitives::LogEntry};
@@ -6,7 +6,7 @@ use crate::{common::Command, node::primitives::LogEntry};
 pub enum NodeEvent {
     NewNode(String, SocketAddr),
     LogEntry(SocketAddr, u32, Vec<LogEntry>),
-    LogAck(u32, String),
+    LogAck(IpAddr, u32, String),
     VoteReqReceived(SocketAddr, u32),
     VoteReceived,
     ClientReq(Sender<String>, Command),

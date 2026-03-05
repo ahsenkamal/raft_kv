@@ -1,9 +1,9 @@
 use crate::client::ClientConfig;
 use crate::common::Command;
 use anyhow::Result;
-use tokio::io::{AsyncReadExt};
-use std::io;
+use tokio::io::{AsyncReadExt, self, AsyncBufReadExt, BufReader};
 use tokio::net::TcpStream;
+use std::io::Write;
 
 pub struct Client {
     config: ClientConfig,
@@ -25,16 +25,24 @@ impl Client {
     // infinite loop to parse and send commands to configured gateway
     async fn repl(stream: &mut TcpStream) -> Result<(), anyhow::Error> {
         let mut input = String::new();
+        let stdin = io::stdin();
+        let mut reader = BufReader::new(stdin);
+
         loop {
+            input.clear();
             print!("> ");
-            io::stdin()
-                .read_line(&mut input)
-                .expect("Faileld to take input");
+            std::io::stdout().flush().expect("couldn't flush");
+
+            reader.read_line(&mut input).await?;
+            let input = input.trim();
             if input.eq_ignore_ascii_case("exit") {
                 break;
             }
             let command: Command = Command::parse(&input)?;
+            println!("Parsed command: {:?}", command);
             Command::send(stream, command).await?;
+
+            println!("Command sent, waiting for response...");
 
             // todo: proper framing while receiving
             let mut buffer = [0u8; 1024];
